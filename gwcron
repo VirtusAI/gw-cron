@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# vars
+DOCKER_USER=$1
+DOCKER_PASS=$2
+
 # starting state
 STATE='disableSerial'
 
@@ -18,7 +22,7 @@ function createFolders {
 }
 
 function docker {
-    docker login -u $1 -p $2 ci.virtusai.me:5001
+    docker login -u DOCKER_USER -p DOCKER_PASS ci.virtusai.me:5001
     sleep 20
     docker pull ci.virtusai.me:5001/gateway_dockermanager:latest
     sleep 20
