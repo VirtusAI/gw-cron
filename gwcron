@@ -22,7 +22,9 @@ function createFolders {
 }
 
 function docker {
-    docker login -u DOCKER_USER -p DOCKER_PASS ci.virtusai.me:5001
+    echo $DOCKER_USER
+    echo $DOCKER_PASS
+    docker login -u $DOCKER_USER -p $DOCKER_PASS ci.virtusai.me:5001
     sleep 20
     docker pull ci.virtusai.me:5001/gateway_dockermanager:latest
     sleep 20
