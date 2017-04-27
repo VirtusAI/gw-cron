@@ -5,7 +5,26 @@ DOCKER_USER=$1
 DOCKER_PASS=$2
 
 # starting state
-STATE='disableSerial'
+STATE='checkEth0'
+
+function checkEth0 {
+    eth_on=$(cat /sys/class/net/eth0/operstate | grep -c up)
+    ppp_on=$(route -n | grep -c ^0.0.0.0.*ppp0)
+    if [ $eth_on -eq 1 ] && [ $ppp_on -eq 1 ]; then
+        route del default ppp0
+        echo "deleted ppp0 route"
+        STATE='changeDNS'
+    else
+        echo "eth0 = $eth_on  ppp_on = $ppp_on"
+        # TODO check GSM !!
+        STATE='changeDNS'
+    fi
+}
+
+function changeDNS {
+    echo -e "nameserver 8.8.8.8\nameserver 8.8.4.4" > /etc/resolv.conf
+    STATE='disableSerial'
+}
 
 function disableSerial {
     [[ -f /usr/bin/rpi-serial-console ]] && echo "Already has rpi-serial-console" || wget --no-cache --quiet https://raw.githubusercontent.com/virtusai/rpi-serial-console/master/rpi-serial-console -O /usr/bin/rpi-serial-console
@@ -43,7 +62,6 @@ function main {
         $STATE
     done
 }
-
 
 # Well Behaved Exit
 trap preExit EXIT
