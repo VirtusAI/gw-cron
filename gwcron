@@ -8,7 +8,7 @@ DOCKER_PASS=$2
 STATE='disableSerial'
 
 function disableSerial {
-    wget https://raw.githubusercontent.com/virtusai/rpi-serial-console/master/rpi-serial-console -O /usr/bin/rpi-serial-console
+    [[ -f /usr/bin/rpi-serial-console ]] && echo "Already has rpi-serial-console" || wget --no-cache --quiet https://raw.githubusercontent.com/virtusai/rpi-serial-console/master/rpi-serial-console -O /usr/bin/rpi-serial-console
     chmod +x /usr/bin/rpi-serial-console
     /usr/bin/rpi-serial-console disable
     STATE='createFolders'
