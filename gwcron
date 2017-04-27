@@ -17,13 +17,11 @@ function disableSerial {
 
 function createFolders {
     mkdir -p /home/pirate/docker-manager/store && mkdir /data
-    STATE='docker'
+    STATE='dockerStart'
     echo "Done folder structure..."
 }
 
-function docker {
-    echo $DOCKER_USER
-    echo $DOCKER_PASS
+function dockerStart {
     docker login -u $DOCKER_USER -p $DOCKER_PASS ci.virtusai.me:5001
     sleep 20
     docker pull ci.virtusai.me:5001/gateway_dockermanager:latest
