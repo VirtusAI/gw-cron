@@ -15,8 +15,13 @@ function checkEth0 {
         echo "deleted ppp0 route"
         STATE='changeDNS'
     else
-        echo "No Eth0 available, trying GSM..."
-        STATE='checkGSM'
+        if [ $eth_on -eq 1 ]; then
+            echo "Eth0 is up, moving on..."
+            STATE='changeDNS'
+        else
+            echo "No Eth0 available, trying GSM..."
+            STATE='checkGSM'
+        fi
     fi
 }
 
