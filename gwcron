@@ -21,6 +21,27 @@ function checkEth0 {
     fi
 }
 
+function checkGSM {
+    modem_set=$(lsusb | grep -c 12d1:1001.*Modem)
+    if [ $modem_set -eq 0 ]; then
+        echo -e "[Dialer Defaults]\nInit1 = ATZ\nInit2 = ATE1\nInit3 = AT+CGDCONT=1,\"IP\",\"soracom.io\"\nDial Attempts = 3\nStupid Mode = 1\nModem Type = Analog Modem\nDial Command = ATD\nStupid Mode = 1\nBaud = 460800\nNew PPPD = yes\nModem = /dev/ttyUSB0\nISDN = 0\nAPN = soracom.io\nPhone = *99***1#\nUsername = sora\nPassword = sora\nCarrier Check = no\nAuto DNS = no\nCheck Def Route = 1" > /etc/wvdial.conf
+        echo -e "noauth\nname wvdial" >  /etc/ppp/peers/wvdial
+        usb_modeswitch -v 0x12d1 -p 0x1f01 -V 0x12d1 -P 0x1f01 -M "55534243123456780000000000000011062000000100000000000000000000"
+    fi
+
+    ppp_on=$(route -n | grep -c ^0.0.0.0.*ppp0)
+    if [ $ppp_on -eq 0 ]; then
+        wvdial &
+        sleep 30
+        route add default ppp0
+        STATE='changeDNS'
+        echo "connected to GSM"
+    else
+        echo "No connection available. Going to sleep..."
+        STATE='doSleep'
+    fi
+}
+
 function changeDNS {
     echo -e "nameserver 8.8.8.8\nameserver 8.8.4.4" > /etc/resolv.conf
     STATE='disableSerial'
@@ -41,15 +62,24 @@ function createFolders {
 }
 
 function dockerStart {
-    docker login -u $DOCKER_USER -p $DOCKER_PASS ci.virtusai.me:5001
-    sleep 20
-    docker pull ci.virtusai.me:5001/gateway_dockermanager:latest
-    sleep 20
-    docker run -d --net=host --privileged -v /var/run/docker.sock:/var/run/docker.sock -v /home/pirate/docker-manager/store:/usr/src/app/store -v /data:/data --name=docker-manager --rm ci.virtusai.me:5001/gateway_dockermanager:latest
+    docker_on=$(docker ps | grep -c docker-manager)
 
-    echo "Done docker startup..."
-    # Exit state
-    exit 0
+    if [ $docker_on -eq 0 ]; then
+        echo "Starting docker-manager"
+        docker login -u $DOCKER_USER -p $DOCKER_PASS ci.virtusai.me:5001
+        sleep 20
+        docker pull ci.virtusai.me:5001/gateway_dockermanager:latest
+        sleep 20
+        docker run -d --net=host --privileged -v /var/run/docker.sock:/var/run/docker.sock -v /home/pirate/docker-manager/store:/usr/src/app/store -v /data:/data --name=docker-manager --rm ci.virtusai.me:5001/gateway_dockermanager:latest
+    else
+        echo "docker-manager is already up"
+    fi
+
+    STATE='doSleep'
+}
+
+function doSleep {
+    sleep 5
 }
 
 function preExit {
@@ -60,6 +90,7 @@ function main {
     while true
     do
         $STATE
+        sleep 5
     done
 }
 
