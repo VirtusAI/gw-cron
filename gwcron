@@ -15,9 +15,8 @@ function checkEth0 {
         echo "deleted ppp0 route"
         STATE='changeDNS'
     else
-        echo "eth0 = $eth_on  ppp_on = $ppp_on"
-        # TODO check GSM !!
-        STATE='changeDNS'
+        echo "No Eth0 available, trying GSM..."
+        STATE='checkGSM'
     fi
 }
 
@@ -27,6 +26,7 @@ function checkGSM {
         echo -e "[Dialer Defaults]\nInit1 = ATZ\nInit2 = ATE1\nInit3 = AT+CGDCONT=1,\"IP\",\"soracom.io\"\nDial Attempts = 3\nStupid Mode = 1\nModem Type = Analog Modem\nDial Command = ATD\nStupid Mode = 1\nBaud = 460800\nNew PPPD = yes\nModem = /dev/ttyUSB0\nISDN = 0\nAPN = soracom.io\nPhone = *99***1#\nUsername = sora\nPassword = sora\nCarrier Check = no\nAuto DNS = no\nCheck Def Route = 1" > /etc/wvdial.conf
         echo -e "noauth\nname wvdial" >  /etc/ppp/peers/wvdial
         usb_modeswitch -v 0x12d1 -p 0x1f01 -V 0x12d1 -P 0x1f01 -M "55534243123456780000000000000011062000000100000000000000000000"
+        echo "GSM file settings done"
     fi
 
     ppp_on=$(route -n | grep -c ^0.0.0.0.*ppp0)
@@ -37,7 +37,7 @@ function checkGSM {
         STATE='changeDNS'
         echo "connected to GSM"
     else
-        echo "No connection available. Going to sleep..."
+        echo "No GSM connection available. Going to sleep..."
         STATE='doSleep'
     fi
 }
@@ -79,7 +79,9 @@ function dockerStart {
 }
 
 function doSleep {
+    echo "Going to sleep for new cycle..."
     sleep 5
+    STATE='checkEth0'
 }
 
 function preExit {
