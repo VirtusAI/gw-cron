@@ -3,30 +3,43 @@
 # vars
 DOCKER_USER=$1
 DOCKER_PASS=$2
+PPPD_PID=0
 
 # starting state
+RESTART_DOCKER=0
 STATE='checkEth0'
 
 function checkEth0 {
     eth_on=$(cat /sys/class/net/eth0/operstate | grep -c up)
     ppp_on=$(route -n | grep -c ^0.0.0.0.*ppp0)
-    if [ $eth_on -eq 1 ] && [ $ppp_on -eq 1 ]; then
-        route del default ppp0
-        echo "deleted ppp0 route"
+
+    if [ $eth_on -eq 1 ]; then
+        # stop GSM if active
+        if [ $ppp_on -eq 1 ]; then
+            kill $PPPD_PID
+            $PPPD_PID=0
+            echo "Killed wvdial client..."
+            $RESTART_DOCKER=1
+        fi
+        echo "Eth0 is up, moving on..."
         STATE='changeDNS'
     else
-        if [ $eth_on -eq 1 ]; then
-            echo "Eth0 is up, moving on..."
-            STATE='changeDNS'
-        else
-            echo "No Eth0 available, trying GSM..."
-            STATE='checkGSM'
-        fi
+        echo "No Eth0 available, trying GSM..."
+        STATE='checkGSM'
     fi
 }
 
 function checkGSM {
-    modem_set=$(lsusb | grep -c 12d1:1001.*Modem)
+    # check if there is a GSM stick
+    modem_set=$(lsusb | grep -c 12d1:)
+    if [ $modem_set -eq 0 ]; then
+        echo "No GSM stick is present, taking a little nap..."
+        STATE='doSleep'
+        return
+    fi
+
+    # change stick settings
+    modem_set=$(lsusb | grep -c 12d1.*Modem)
     if [ $modem_set -eq 0 ]; then
         echo -e "[Dialer Defaults]\nInit1 = ATZ\nInit2 = ATE1\nInit3 = AT+CGDCONT=1,\"IP\",\"soracom.io\"\nDial Attempts = 3\nStupid Mode = 1\nModem Type = Analog Modem\nDial Command = ATD\nStupid Mode = 1\nBaud = 460800\nNew PPPD = yes\nModem = /dev/ttyUSB0\nISDN = 0\nAPN = soracom.io\nPhone = *99***1#\nUsername = sora\nPassword = sora\nCarrier Check = no\nAuto DNS = no\nCheck Def Route = 1" > /etc/wvdial.conf
         echo -e "noauth\nname wvdial" >  /etc/ppp/peers/wvdial
@@ -34,15 +47,17 @@ function checkGSM {
         echo "GSM file settings done"
     fi
 
+    # init connection
     ppp_on=$(route -n | grep -c ^0.0.0.0.*ppp0)
     if [ $ppp_on -eq 0 ]; then
-        wvdial &
+        wvdial & PPPD_PID=$!
         sleep 30
         route add default ppp0
         STATE='changeDNS'
-        echo "connected to GSM"
+        echo "connected to GSM with PID=$PPPD_PID"
+        $RESTART_DOCKER=1
     else
-        echo "No GSM connection available. Going to sleep..."
+        echo "GSM is already active, going to sleep..."
         STATE='doSleep'
     fi
 }
@@ -67,6 +82,15 @@ function createFolders {
 }
 
 function dockerStart {
+    # check if there is internet
+    ping -c 1 google.com
+    rc=$?
+    if [[ $rc -eq 1 ]]; then
+        echo "Waiting for internet to be up..."
+        return
+    fi
+
+    # proceed with starting docker
     docker_on=$(docker ps | grep -c docker-manager)
 
     if [ $docker_on -eq 0 ]; then
@@ -77,7 +101,15 @@ function dockerStart {
         sleep 20
         docker run -d --net=host --privileged -v /var/run/docker.sock:/var/run/docker.sock -v /home/pirate/docker-manager/store:/usr/src/app/store -v /data:/data --name=docker-manager --rm ci.virtusai.me:5001/gateway_dockermanager:latest
     else
-        echo "docker-manager is already up"
+        if [ $RESTART_DOCKER -eq 1 ]; then
+            $RESTART_DOCKER=0
+            docker stop docker-manager
+            sleep 20
+            docker run -d --net=host --privileged -v /var/run/docker.sock:/var/run/docker.sock -v /home/pirate/docker-manager/store:/usr/src/app/store -v /data:/data --name=docker-manager --rm ci.virtusai.me:5001/gateway_dockermanager:latest
+            echo "docker-manager has restarted due to network changes"
+        else
+            echo "docker-manager is already up"
+        fi
     fi
 
     STATE='doSleep'
